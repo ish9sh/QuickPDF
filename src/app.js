@@ -94,6 +94,16 @@ class PDFEditorApp {
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this._signPickerOpen) this.closeSignPicker(); });
     window.addEventListener('resize', () => { if (this._signPickerOpen) this.positionSignPicker(); });
 
+    let overlayResizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(overlayResizeTimer);
+      overlayResizeTimer = setTimeout(() => {
+        if (this.pageViews && this.pageViews.length > 0) {
+          this.pageViews.forEach(pv => this.refreshPageOverlays(pv));
+        }
+      }, 150);
+    });
+
     document.getElementById('eraseModeBtn')?.addEventListener('click', () => {
       this.setMode('erase');
     });
