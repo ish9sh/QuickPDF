@@ -6,6 +6,12 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
+    // Absolute public path ensures asset URLs (e.g. the PDF.js worker resolved
+    // via `new URL(…, import.meta.url)`) are always correct regardless of which
+    // sub-path Netlify serves the page from.
+    publicPath: '/',
+    // Workers and other emitted assets land in dist/assets/
+    assetModuleFilename: 'assets/[name][ext]',
     clean: true,
   },
   module: {
@@ -16,6 +22,13 @@ module.exports = {
         use: {
           loader: 'babel-loader',
         },
+      },
+      // Emit pdf.worker.min.js (and any other pre-built worker files from
+      // node_modules) as a standalone file so the browser can load it via a
+      // URL rather than Webpack trying to re-bundle it.
+      {
+        test: /pdf\.worker(\.min)?\.js$/,
+        type: 'asset/resource',
       },
     ],
   },
