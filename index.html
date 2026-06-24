@@ -703,16 +703,52 @@
     }
     .page-thumb-del svg { width: 13px; height: 13px; }
     .page-thumb:hover .page-thumb-del { display: grid; }
-    .pages-foot {
-      flex: 0 0 auto; border-top: 1px solid var(--line); padding: 12px 20px;
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    }
-    .pages-foot .row { display: flex; align-items: center; gap: 8px; }
-    .pages-foot label { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
-    .pages-foot #insertPos { min-width: 90px; }
-    .pages-foot .spacer { flex: 1; }
-    .pages-foot #insertBlankBtn { justify-content: center; }
     .pages-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 13px; padding: 30px 0; }
+
+    /* ── Collapsible utility strap (reorder / insert actions) ────────────────
+       Desktop: renders as a plain bottom footer row (mirrors .pages-foot).
+       Mobile: becomes an absolute frosted-glass pill with a toggle handle.
+    ────────────────────────────────────────────────────────────────────────── */
+    .horizontal-utility-strap {
+      /* Desktop baseline – same look as the old .pages-foot */
+      flex: 0 0 auto;
+      border-top: 1px solid var(--line);
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;   /* stacks toggle + inner row */
+      gap: 0;
+    }
+    .strap-inner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .strap-inner .row   { display: flex; align-items: center; gap: 8px; }
+    .strap-inner label  { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    .strap-inner #insertPos { min-width: 90px; }
+    .strap-inner #insertBlankBtn { justify-content: center; }
+    .strap-spacer { flex: 1; }
+
+    /* Toggle button – hidden on desktop, revealed via mobile rule below */
+    .utility-strap-toggle {
+      display: none;
+    }
+
+    /* Collapsed state – only meaningful on mobile (the transform is applied
+       from the mobile rule; on desktop this class has no visual effect). */
+    .horizontal-utility-strap.collapsed {
+      transform: translate(-50%, -100%);
+    }
+    .horizontal-utility-strap.collapsed .strap-chevron {
+      transform: rotate(180deg);   /* flip arrow to point up → "expand" hint */
+    }
+    /* Clone drag overlay (spawned by the touch DnD handler in app.js) */
+    .thumb-drag-clone {
+      /* All inline styles are set dynamically; this class is the selector hook
+         for any CSS-side overrides (e.g. animation polish). */
+      will-change: left, top;
+    }
 
     /* ---------- Skip link (keyboard / screen-reader users) ---------- */
     .skip-link {
@@ -1105,6 +1141,86 @@
       }
       .pw-actions { flex-direction: column; }
       .pw-actions .btn { width: 100%; justify-content: center; }
+
+      /* ── Mobile utility strap: frosted-glass pill pinned to the top of the drawer ── */
+      .horizontal-utility-strap {
+        /* Override desktop baseline */
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 92vw;
+        /* Pill geometry */
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        padding: 6px 16px 14px;   /* extra bottom padding cushions the toggle handle */
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        z-index: 999;
+        /* Slide transition */
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        /* Remove desktop border/flex overrides */
+        border-top: none;
+        flex-direction: column;
+        gap: 4px;
+        /* Elevate above the grid thumbnails */
+        display: flex;
+      }
+
+      /* Collapsed: slide completely above the visible area */
+      .horizontal-utility-strap.collapsed {
+        transform: translate(-50%, -100%);
+      }
+
+      /* Chevron flip when collapsed */
+      .horizontal-utility-strap.collapsed .strap-chevron {
+        transform: rotate(180deg);
+      }
+
+      /* Show the toggle handle on mobile */
+      .utility-strap-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* Pin to the very bottom centre of the strap pill */
+        position: absolute;
+        bottom: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 22px;
+        border: none;
+        border-radius: 0 0 10px 10px;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10);
+        cursor: pointer;
+        z-index: 1000;
+        transition: background 0.15s ease;
+        padding: 0;
+      }
+      .utility-strap-toggle:hover {
+        background: #f0edff;
+      }
+      .utility-strap-toggle svg {
+        width: 16px;
+        height: 16px;
+        color: var(--brand);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      /* Give the grid top-padding so the strap pill doesn't obscure thumbnails
+         when the strap is expanded. The strap is ~52px tall on mobile. */
+      .pages-grid {
+        padding-top: 62px;
+      }
+      /* When strap is collapsed bring the grid back up flush */
+      .horizontal-utility-strap.collapsed ~ .pages-grid,
+      .pages-drawer:has(.horizontal-utility-strap.collapsed) .pages-grid {
+        padding-top: 18px;
+      }
     }
 
     /* On very small phones (≤ 480 px) drop the text labels from tool buttons
@@ -1548,16 +1664,37 @@
         </button>
       </div>
       <div class="pages-grid" id="pagesGrid"></div>
-      <div class="pages-foot">
-        <div class="row">
-          <label for="insertPos">Insert at</label>
-          <select id="insertPos" class="field"></select>
-        </div>
-        <span class="spacer"></span>
-        <button class="btn primary" id="insertBlankBtn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          Insert blank page
+
+      <!-- Collapsible utility strap: houses all reorder actions.
+           On mobile it floats at the top of the drawer and can be hidden
+           by tapping the toggle handle so the thumbnail grid is fully visible. -->
+      <div class="horizontal-utility-strap" id="utilityStrap">
+        <!-- Toggle handle – centred on the strap's bottom rim -->
+        <button
+          class="utility-strap-toggle"
+          id="utilityStrapToggle"
+          type="button"
+          aria-label="Collapse utility bar"
+          aria-expanded="true"
+          aria-controls="utilityStrap"
+        >
+          <svg class="strap-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 15l6-6 6 6"/>
+          </svg>
         </button>
+
+        <!-- Action controls -->
+        <div class="strap-inner">
+          <div class="row">
+            <label for="insertPos">Insert at</label>
+            <select id="insertPos" class="field"></select>
+          </div>
+          <span class="strap-spacer"></span>
+          <button class="btn primary" id="insertBlankBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Insert blank page
+          </button>
+        </div>
       </div>
     </aside>
   </div>

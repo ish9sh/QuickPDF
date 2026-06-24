@@ -218,6 +218,17 @@ class PDFEditorApp {
       if (e.target.id === 'pagesBackdrop') this.closePagesPanel();   // click outside the drawer
     });
     document.getElementById('insertBlankBtn')?.addEventListener('click', () => this.insertBlankPage());
+
+    // Collapsible utility strap toggle (mobile only — the button is display:none on desktop)
+    document.getElementById('utilityStrapToggle')?.addEventListener('click', () => {
+      const strap  = document.getElementById('utilityStrap');
+      const toggle = document.getElementById('utilityStrapToggle');
+      if (!strap) return;
+      const isNowCollapsed = strap.classList.toggle('collapsed');
+      if (toggle) toggle.setAttribute('aria-expanded', String(!isNowCollapsed));
+      toggle?.setAttribute('aria-label', isNowCollapsed ? 'Expand utility bar' : 'Collapse utility bar');
+    });
+
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.closePagesPanel(); });
   }
 
@@ -3769,6 +3780,7 @@ class PDFEditorApp {
 
   /** Native HTML5 drag-and-drop wiring for one thumbnail. */
   wireThumbDnD(thumb) {
+    // ── Desktop: native HTML5 DnD ────────────────────────────────────────────
     thumb.addEventListener('dragstart', (e) => {
       this._dragFrom = Number(thumb.dataset.index);
       thumb.classList.add('dragging');
@@ -3802,6 +3814,150 @@ class PDFEditorApp {
       if (from == null || Number.isNaN(from)) return;
       this.movePage(from, after ? j + 1 : j);   // insert before original index (after ? j+1 : j)
     });
+
+    // ── Mobile: touch long-press fallback (400 ms hold → drag) ───────────────
+    // State is kept per-thumb in closure variables so no cross-thumb bleed.
+    let _pressTimer   = null;   // setTimeout handle
+    let _touchActive  = false;  // long-press drag is live
+    let _clone        = null;   // floating .thumb-drag-clone DOM node
+    let _offsetX      = 0;      // finger-to-clone-origin delta
+    let _offsetY      = 0;
+
+    /** Spawn the floating visual clone at the given viewport position. */
+    const spawnClone = (clientX, clientY) => {
+      const rect = thumb.getBoundingClientRect();
+      _clone = thumb.cloneNode(true);
+      _clone.classList.add('thumb-drag-clone');
+      // Remove interactive children from the mirror so they don't steal events
+      _clone.querySelectorAll('button').forEach(b => b.remove());
+      Object.assign(_clone.style, {
+        position:      'fixed',
+        top:           `${rect.top}px`,
+        left:          `${rect.left}px`,
+        width:         `${rect.width}px`,
+        height:        `${rect.height}px`,
+        zIndex:        '9999',
+        pointerEvents: 'none',
+        opacity:       '0.85',
+        transform:     'scale(1.06)',
+        transition:    'transform 120ms ease',
+        borderRadius:  getComputedStyle(thumb).borderRadius,
+        boxShadow:     '0 12px 32px rgba(0,0,0,0.45)',
+      });
+      document.body.appendChild(_clone);
+      // Offset so the clone's top-left tracks the original touch point
+      _offsetX = clientX - rect.left;
+      _offsetY = clientY - rect.top;
+    };
+
+    /** Translate the clone to follow the finger. */
+    const moveClone = (clientX, clientY) => {
+      if (!_clone) return;
+      _clone.style.left = `${clientX - _offsetX}px`;
+      _clone.style.top  = `${clientY - _offsetY}px`;
+    };
+
+    /** Remove the floating clone from the DOM. */
+    const destroyClone = () => {
+      if (_clone) { _clone.remove(); _clone = null; }
+    };
+
+    /** Cancel an in-flight press timer and wipe drag state. */
+    const cancelPress = () => {
+      clearTimeout(_pressTimer);
+      _pressTimer = null;
+    };
+
+    /** Update drop-before/drop-after markers by probing the element under finger. */
+    const updateDropMarkers = (clientX, clientY) => {
+      // Hide clone so elementFromPoint sees the real grid beneath it
+      if (_clone) _clone.style.display = 'none';
+      const el = document.elementFromPoint(clientX, clientY);
+      if (_clone) _clone.style.display = '';
+
+      this.clearDropMarkers();
+      const target = el?.closest('.page-thumb');
+      if (!target || target === thumb) return;
+
+      const rect   = target.getBoundingClientRect();
+      const after  = (clientX - rect.left) > rect.width / 2;
+      target.classList.add(after ? 'drop-after' : 'drop-before');
+    };
+
+    // ── touchstart ─────────────────────────────────────────────────────────
+    thumb.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;   // ignore multi-touch
+      const t = e.touches[0];
+      cancelPress();
+      _touchActive = false;
+
+      _pressTimer = setTimeout(() => {
+        // 400 ms elapsed with no movement — begin visual drag
+        _pressTimer   = null;
+        _touchActive  = true;
+        this._dragFrom = Number(thumb.dataset.index);
+        thumb.classList.add('dragging');
+        spawnClone(t.clientX, t.clientY);
+      }, 400);
+    }, { passive: true });
+
+    // ── touchmove ──────────────────────────────────────────────────────────
+    thumb.addEventListener('touchmove', (e) => {
+      if (!_touchActive) {
+        // Not yet in drag mode — cancel the press timer so a normal
+        // swipe/scroll continues unimpeded.
+        cancelPress();
+        return;
+      }
+      // We own this gesture; block global panel scrolling.
+      e.preventDefault();
+
+      const t = e.touches[0];
+      moveClone(t.clientX, t.clientY);
+      updateDropMarkers(t.clientX, t.clientY);
+    }, { passive: false });   // passive:false required for preventDefault()
+
+    // ── touchend / touchcancel ──────────────────────────────────────────────
+    const onTouchEnd = (e) => {
+      cancelPress();
+
+      if (!_touchActive) return;   // long-press never fired, nothing to commit
+
+      // Determine final drop target before destroying the clone overlay.
+      let clientX, clientY;
+      if (e.changedTouches?.length) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+      }
+
+      destroyClone();
+      thumb.classList.remove('dragging');
+      _touchActive = false;
+
+      const from = this._dragFrom;
+      this._dragFrom = null;
+
+      if (from == null || Number.isNaN(from)) {
+        this.clearDropMarkers();
+        return;
+      }
+
+      // Find the thumb currently marked as the drop target.
+      const markedAfter  = document.querySelector('#pagesGrid .page-thumb.drop-after');
+      const markedBefore = document.querySelector('#pagesGrid .page-thumb.drop-before');
+      const dropTarget   = markedAfter || markedBefore;
+
+      this.clearDropMarkers();
+
+      if (!dropTarget) return;   // released over empty space — cancel
+
+      const j     = Number(dropTarget.dataset.index);
+      const after = Boolean(markedAfter);
+      this.movePage(from, after ? j + 1 : j);
+    };
+
+    thumb.addEventListener('touchend',    onTouchEnd, { passive: true });
+    thumb.addEventListener('touchcancel', onTouchEnd, { passive: true });
   }
 
   clearDropMarkers() {
