@@ -184,6 +184,9 @@
     .tool.featured:hover:not(:disabled) { background: #efecff; color: var(--ink); }
     .sidebar .sep { width: 60%; height: 1px; background: var(--line); margin: 6px 0; }
 
+    /* Mobile-only elements: hidden on desktop, shown inside the bottom rail on ≤768px. */
+    .mobile-only { display: none !important; }
+
     /* Slim, unobtrusive scrollbars for the tool rails (only visible when they overflow on short
        screens). Keeps the icons at full size rather than shrinking them to fit. */
     .sidebar, .rightbar { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -1103,20 +1106,55 @@
         flex: 0 0 auto;
       }
 
-      /* Tighter, square tool buttons in the rail */
+      /* Hide the right rail entirely — Reorder + Merge live in the bottom rail instead */
+      .rightbar { display: none !important; }
+
+      /* Reveal the mobile-only sidebar duplicates */
+      .mobile-only { display: flex !important; }
+
+      /* The mobile .sep is a vertical 1px divider inside the horizontal rail */
+      .sidebar .sep.mobile-only {
+        width: 1px;
+        height: 36px;
+        background: var(--line);
+        margin: 0 4px;
+        flex: 0 0 auto;
+      }
+
+      /* Tighter, square tool buttons in the rail.
+         min-width / icon sizes are fluid so the rail fills the screen
+         without horizontal scroll on any phone width (320–768px). */
       .tool {
         flex-direction: column;
         width: auto;
-        min-width: 58px;
-        padding: 6px 8px;
-        flex: 0 0 auto;
-        font-size: 11px;
+        /* fluid: ~62px on tablet, ~46px on small phone */
+        min-width: clamp(42px, 11vw, 62px);
+        /* fluid padding so buttons breathe but don't crowd */
+        padding: clamp(4px, 1.2vw, 8px) clamp(3px, 1vw, 8px);
+        flex: 1 1 0;        /* grow+shrink equally — fills the rail without overflow */
+        max-width: 72px;    /* cap so buttons don't become absurdly wide on tablets */
+        font-size: clamp(9px, 2.2vw, 11px);
+        gap: 2px;
       }
-      .tool .tool-ico           { width: 28px; height: 28px; }
+      /* Standard tool icon */
+      .tool .tool-ico {
+        width:  clamp(22px, 6.5vw, 30px);
+        height: clamp(22px, 6.5vw, 30px);
+      }
+      /* Featured (Edit, Sign) + Merge icons — slightly larger */
       .tool.featured .tool-ico,
-      .tool.merge-tool .tool-ico { width: 30px; height: 30px; }
-      .tool.featured svg        { width: 22px; height: 22px; }
-      .sidebar .sep             { width: 1px; height: 36px; margin: 0 4px; }
+      .tool.merge-tool .tool-ico {
+        width:  clamp(24px, 7vw, 32px);
+        height: clamp(24px, 7vw, 32px);
+      }
+      /* SVG-only tools (Annotate) */
+      .tool.featured svg { width: clamp(18px, 5vw, 24px); height: clamp(18px, 5vw, 24px); }
+      /* Vertical separator between tool groups */
+      .sidebar .sep {
+        width: 1px; height: clamp(28px, 7vw, 36px);
+        margin: 0 clamp(2px, 0.8vw, 5px);
+        flex: 0 0 auto;
+      }
 
       /* ── Floating text-styling toolbar ── */
       #textToolbar {
@@ -1223,13 +1261,66 @@
       }
     }
 
-    /* On very small phones (≤ 480 px) drop the text labels from tool buttons
-       so the full rail still fits in one row without horizontal scroll. */
-    @media (max-width: 480px) {
-      .tool { font-size: 0; min-width: 46px; padding: 6px; gap: 0; }
-      .tool .tool-ico           { width: 26px; height: 26px; }
+    /* ── Medium phones: 481–600px ──────────────────────────────────────────────
+       Labels still visible but slightly smaller; rail gets a touch more compact. */
+    @media (max-width: 600px) {
+      .tool {
+        min-width: clamp(38px, 12.5vw, 58px);
+        font-size: clamp(8.5px, 2.3vw, 10.5px);
+        padding: clamp(4px, 1.2vw, 6px) clamp(2px, 0.8vw, 6px);
+      }
+      .tool .tool-ico {
+        width:  clamp(20px, 6.8vw, 27px);
+        height: clamp(20px, 6.8vw, 27px);
+      }
       .tool.featured .tool-ico,
-      .tool.merge-tool .tool-ico { width: 28px; height: 28px; }
+      .tool.merge-tool .tool-ico {
+        width:  clamp(22px, 7.5vw, 30px);
+        height: clamp(22px, 7.5vw, 30px);
+      }
+      .tool.featured svg { width: clamp(16px, 5.5vw, 22px); height: clamp(16px, 5.5vw, 22px); }
+      .sidebar { gap: 0; }
+    }
+
+    /* ── Small phones: ≤ 480px ─────────────────────────────────────────────────
+       Drop text labels so all 9 buttons share a 320–480px screen without scroll. */
+    @media (max-width: 480px) {
+      .tool {
+        font-size: 0;               /* hide label text */
+        gap: 0;
+        min-width: clamp(34px, 10.5vw, 50px);
+        padding: clamp(4px, 1.2vw, 7px) clamp(2px, 0.8vw, 5px);
+      }
+      .tool .tool-ico {
+        width:  clamp(20px, 6.5vw, 26px);
+        height: clamp(20px, 6.5vw, 26px);
+      }
+      .tool.featured .tool-ico,
+      .tool.merge-tool .tool-ico {
+        width:  clamp(22px, 7vw, 28px);
+        height: clamp(22px, 7vw, 28px);
+      }
+      .tool.featured svg { width: clamp(16px, 5.5vw, 20px); height: clamp(16px, 5.5vw, 20px); }
+      .sidebar { padding: 4px 4px; gap: 0; }
+      .sidebar .sep { margin: 0 clamp(1px, 0.5vw, 3px); }
+    }
+
+    /* ── Tiny phones: ≤ 380px ──────────────────────────────────────────────────
+       Extra tightening for the smallest Android/iOS devices (e.g. SE 1st gen). */
+    @media (max-width: 380px) {
+      .tool {
+        min-width: clamp(30px, 9.5vw, 42px);
+        padding: 3px 2px;
+      }
+      .tool .tool-ico {
+        width:  clamp(18px, 6vw, 22px);
+        height: clamp(18px, 6vw, 22px);
+      }
+      .tool.featured .tool-ico,
+      .tool.merge-tool .tool-ico {
+        width:  clamp(19px, 6.5vw, 24px);
+        height: clamp(19px, 6.5vw, 24px);
+      }
     }
 
   </style>
@@ -1286,6 +1377,19 @@
       <button class="tool danger" id="clearSignatureBtn" disabled title="Discard all of your unsaved changes (you can Undo this)">
         <img class="tool-ico" src="/assets/fun-ui/discard.png" alt="" aria-hidden="true">
         Discard
+      </button>
+
+      <!-- Mobile-only duplicates of the Reorder + Merge tools.
+           Hidden on desktop via CSS; shown inside the bottom toolbar rail on ≤768px
+           so all tools live in one scrollable row without the separate .rightbar. -->
+      <div class="sep mobile-only"></div>
+      <button class="tool mobile-only" id="pagesPanelBtnMobile" disabled title="Reorder pages">
+        <img class="tool-ico" src="/assets/fun-ui/reorder.png" alt="" aria-hidden="true">
+        Reorder
+      </button>
+      <button class="tool merge-tool mobile-only" id="mergeBtnMobile" title="Merge PDFs">
+        <img class="tool-ico" src="/assets/fun-ui/merge.png" alt="" aria-hidden="true">
+        Merge
       </button>
     </aside>
 
@@ -1811,8 +1915,8 @@
         { sel: '#eraseModeBtn',      title: 'Erase',         desc: 'Drag a box over old content, like a stale signature, to white it out.' },
         { sel: '#stampModeBtn',      title: 'Stamp',         desc: 'Drop a mark such as Approved, Rejected, Final, Draft or Copy.' },
         { sel: '#clearSignatureBtn', title: 'Discard',       desc: 'Remove all your unsaved changes at once. You can always Undo afterwards.' },
-        { sel: '#pagesPanelBtn',     title: 'Reorder pages', desc: 'Open the page manager to drag, delete or insert blank pages.' },
-        { sel: '#mergeBtn',          title: 'Merge PDFs',    desc: 'Combine several PDFs into a single document, in any order you like.' }
+        { sel: '#pagesPanelBtn, #pagesPanelBtnMobile', title: 'Reorder pages', desc: 'Open the page manager to drag, delete or insert blank pages.' },
+        { sel: '#mergeBtn, #mergeBtnMobile',            title: 'Merge PDFs',   desc: 'Combine several PDFs into a single document, in any order you like.' }
       ];
 
       var ov = document.getElementById('tourOverlay');

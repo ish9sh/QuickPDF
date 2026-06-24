@@ -213,6 +213,12 @@ class PDFEditorApp {
 
     // Pages manager (reorder / delete / insert blank pages)
     document.getElementById('pagesPanelBtn')?.addEventListener('click', () => this.togglePagesPanel());
+    // Mobile-only duplicate (lives in the bottom toolbar rail on ≤768px)
+    document.getElementById('pagesPanelBtnMobile')?.addEventListener('click', () => this.togglePagesPanel());
+    // Mobile-only Merge button (delegates to the same merge drawer)
+    document.getElementById('mergeBtnMobile')?.addEventListener('click', () => {
+      document.getElementById('mergeBtn')?.click();   // re-use merge.js's openDrawer path
+    });
     document.getElementById('pagesPanelClose')?.addEventListener('click', () => this.closePagesPanel());
     document.getElementById('pagesBackdrop')?.addEventListener('click', (e) => {
       if (e.target.id === 'pagesBackdrop') this.closePagesPanel();   // click outside the drawer
@@ -264,7 +270,7 @@ class PDFEditorApp {
 
   /** Enable all the tools/controls that require a loaded PDF. */
   enableUiAfterLoad() {
-    ['saveBtn', 'textInput', 'prevPageBtn', 'nextPageBtn', 'pagesPanelBtn',
+    ['saveBtn', 'textInput', 'prevPageBtn', 'nextPageBtn', 'pagesPanelBtn', 'pagesPanelBtnMobile',
      'editModeBtn', 'textModeBtn', 'signatureModeBtn', 'eraseModeBtn', 'stampModeBtn',
      'annotateModeBtn', 'clearSignatureBtn']
       .forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
@@ -295,7 +301,7 @@ class PDFEditorApp {
     const modeIndicator = document.getElementById('modeIndicator');
     if (modeIndicator) modeIndicator.textContent = 'No PDF loaded';
     this.annotationManager.unmountAll();
-    ['saveBtn', 'textInput', 'prevPageBtn', 'nextPageBtn', 'pagesPanelBtn',
+    ['saveBtn', 'textInput', 'prevPageBtn', 'nextPageBtn', 'pagesPanelBtn', 'pagesPanelBtnMobile',
      'editModeBtn', 'textModeBtn', 'signatureModeBtn', 'eraseModeBtn', 'stampModeBtn',
      'annotateModeBtn', 'clearSignatureBtn']
       .forEach((id) => { const el = document.getElementById(id); if (el) el.disabled = true; });
