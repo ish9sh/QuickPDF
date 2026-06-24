@@ -166,8 +166,11 @@ class PDFEditorApp {
 
     // Per-page canvas click & erase-drag listeners are attached in buildPages().
     // Global move/up so an erase drag keeps tracking outside the page canvas.
+    // Global move/up for erase — listen for both mouse AND touch so dragging works on mobile.
     window.addEventListener('mousemove', (e) => this.onEraseMove(e));
-    window.addEventListener('mouseup', (e) => this.onEraseEnd(e));
+    window.addEventListener('mouseup',   (e) => this.onEraseEnd(e));
+    window.addEventListener('touchmove', (e) => this.onEraseMove(e), { passive: false });
+    window.addEventListener('touchend',  (e) => this.onEraseEnd(e));
 
     // Track which page is in view (for the page indicator) as the stage scrolls.
     document.getElementById('stage')?.addEventListener('scroll', () => this.updateCurrentPageFromScroll());
@@ -649,7 +652,8 @@ class PDFEditorApp {
       // readbacks on a GPU-accelerated canvas.
       const pv = { pageNum: i, page, viewport, canvas, ctx: canvas.getContext('2d', { willReadFrequently: true }), wrapper };
       canvas.addEventListener('click', (e) => this.handleCanvasClick(e, pv));
-      canvas.addEventListener('mousedown', (e) => this.onEraseStart(e, pv));
+      canvas.addEventListener('mousedown',  (e) => this.onEraseStart(e, pv));
+      canvas.addEventListener('touchstart', (e) => this.onEraseStart(e, pv), { passive: false });
       this.pageViews.push(pv);
       // Mount Fabric.js annotation layer over this page
       this.annotationManager.mountPage(pv);
@@ -3104,16 +3108,32 @@ class PDFEditorApp {
     if (!t || !tb || tb.hidden) return;
     const el = t.kind === 'overlay' ? this._overlayElFor(t.edit) : t.el;
     if (!el || !el.isConnected) { this.hideTextToolbar(); return; }
-    const r = el.getBoundingClientRect();
-    const tw = tb.offsetWidth || 360, th = tb.offsetHeight || 40;
+    const r  = el.getBoundingClientRect();
+    const tw = tb.offsetWidth  || 360;
+    const th = tb.offsetHeight || 40;
+
     const stage = document.getElementById('stage');
-    const sr = stage ? stage.getBoundingClientRect() : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
-    let left = Math.max(sr.left + 4, Math.min(r.left + r.width / 2 - tw / 2, sr.right - tw - 4));
+    const sr = stage
+      ? stage.getBoundingClientRect()
+      : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
+
+    // Centre the toolbar over the element, but hard-clamp so it never bleeds
+    // past either the stage boundary OR the visible viewport edge.
+    const maxLeft = Math.min(sr.right, window.innerWidth)  - tw - 4;
+    const minLeft = Math.max(sr.left,  0) + 4;
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    // Prefer above the element; fall back to below if it would clip the top.
     let top = r.top - th - 8;
-    if (top < sr.top + 4) top = r.bottom + 8;                       // would clip the top -> drop below
-    top = Math.max(sr.top + 4, Math.min(top, sr.bottom - th - 4));  // keep on-screen
+    if (top < sr.top + 4) top = r.bottom + 8;
+    // Hard-clamp vertically against both the stage and the viewport.
+    const maxTop = Math.min(sr.bottom, window.innerHeight) - th - 4;
+    const minTop = Math.max(sr.top,    0) + 4;
+    top = Math.max(minTop, Math.min(top, maxTop));
+
     tb.style.left = left + 'px';
-    tb.style.top = top + 'px';
+    tb.style.top  = top  + 'px';
   }
 
   // Standard hyperlink blue (classic browser link colour).
@@ -3315,10 +3335,16 @@ class PDFEditorApp {
       this.commitHistory();
     };
 
+    // Helper: extract { x, y } from either a MouseEvent or a TouchEvent.
+    const getPointer = (e) =>
+      (e.touches && e.touches.length > 0)
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY };
+
     // Rotate: drag the top handle around the text origin (left edge at the baseline). That pivot
     // is fixed by the transform-origin, so it stays put under rotation. Shift snaps to 15°.
     if (rotate) {
-      rotate.addEventListener('mousedown', (e) => {
+      const startRotate = (e) => {
         e.preventDefault(); e.stopPropagation();
         const parent = div.parentElement;
         if (!parent) return;        // overlay was just re-rendered (e.g. committing an open editor)
@@ -3330,62 +3356,82 @@ class PDFEditorApp {
         // Rotate by the change in pointer angle since grab (1:1 drag, no jump). The handle sits
         // away from the origin pivot, so an absolute angle would start offset; a delta doesn't.
         const startRot = edit.rotation || 0;
-        const startAngle = Math.atan2(e.clientY - pivotY, e.clientX - pivotX);
+        const p0 = getPointer(e);
+        const startAngle = Math.atan2(p0.y - pivotY, p0.x - pivotX);
         const move = (ev) => {
-          let deg = startRot + (Math.atan2(ev.clientY - pivotY, ev.clientX - pivotX) - startAngle) * 180 / Math.PI;
+          const p = getPointer(ev);
+          let deg = startRot + (Math.atan2(p.y - pivotY, p.x - pivotX) - startAngle) * 180 / Math.PI;
           if (ev.shiftKey) deg = Math.round(deg / 15) * 15;
           deg = Math.round(deg);
           edit.rotation = deg;
           div.style.transform = `rotate(${deg}deg)`;
         };
         const up = () => {
-          window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+          window.removeEventListener('mousemove', move);
+          window.removeEventListener('mouseup', up);
+          window.removeEventListener('touchmove', move);
+          window.removeEventListener('touchend', up);
           this.commitHistory();
           this.showStatus(`Rotated to ${edit.rotation || 0}°`, 'success');
         };
-        window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
-      });
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+        window.addEventListener('touchmove', move, { passive: false });
+        window.addEventListener('touchend', up);
+      };
+      rotate.addEventListener('mousedown', startRotate);
+      rotate.addEventListener('touchstart', startRotate, { passive: false });
     }
 
     // Move (drag the body)
-    div.addEventListener('mousedown', (e) => {
+    const startMove = (e) => {
       if (e.target === del || e.target === handle || e.target === rotate) return;
       const isText = edit.style !== 'signature';
       if (isText) this.selectInsert(edit);   // clicking a text box selects it
-      e.preventDefault(); e.stopPropagation();
-      const sx = e.clientX, sy = e.clientY;
+      // Don't call preventDefault on an input — it would steal focus.
+      if (e.type === 'touchstart') e.preventDefault();
+      e.stopPropagation();
+      const { x: sx, y: sy } = getPointer(e);
       const ox = parseFloat(div.style.left), oy = parseFloat(div.style.top);
       let dragged = false;
       const move = (ev) => {
-        if (!dragged && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 4) return;   // ignore jitter
+        const { x, y } = getPointer(ev);
+        if (!dragged && Math.abs(x - sx) + Math.abs(y - sy) < 4) return;   // ignore jitter
         dragged = true;
-        div.style.left = (ox + ev.clientX - sx) + 'px';
-        div.style.top = (oy + ev.clientY - sy) + 'px';
+        div.style.left = (ox + x - sx) + 'px';
+        div.style.top  = (oy + y - sy) + 'px';
       };
       const up = () => {
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
-        // A drag moves the box; a plain click on a TEXT box opens its editor so the user can place a
+        window.removeEventListener('touchmove', move);
+        window.removeEventListener('touchend', up);
+        // A drag moves the box; a plain tap on a TEXT box opens its editor so the user can place a
         // caret and select PART of the text to style or hyperlink (mirrors Canva/Figma text boxes).
         if (dragged) commitFromDiv();
         else if (isText && pv) this.openInsertEditor(edit, pv, false);
       };
       window.addEventListener('mousemove', move);
       window.addEventListener('mouseup', up);
-    });
+      window.addEventListener('touchmove', move, { passive: false });
+      window.addEventListener('touchend', up);
+    };
+    div.addEventListener('mousedown', startMove);
+    div.addEventListener('touchstart', startMove, { passive: false });
 
     // Resize (drag the corner handle = scale the font size). For a mixed-size box every run
     // scales by the same factor so their relative sizes are preserved.
-    handle.addEventListener('mousedown', (e) => {
+    const startResize = (e) => {
       e.preventDefault(); e.stopPropagation();
-      const sy = e.clientY;
+      const { y: sy } = getPointer(e);
       const startFont = parseFloat(div.style.fontSize);
       const hasRuns = !!(edit.runs && edit.runs.length);
       const spans = hasRuns ? Array.from(div.querySelectorAll('span')) : [];
       const spanStart = spans.map(s => parseFloat(s.style.fontSize) || startFont);
       let factor = 1;
       const move = (ev) => {
-        const f = Math.max(8, startFont + (ev.clientY - sy));
+        const { y } = getPointer(ev);
+        const f = Math.max(8, startFont + (y - sy));
         factor = f / startFont;
         div.style.fontSize = f + 'px';
         div.style.lineHeight = hasRuns ? '1.2' : f + 'px';
@@ -3394,6 +3440,8 @@ class PDFEditorApp {
       const up = () => {
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
+        window.removeEventListener('touchmove', move);
+        window.removeEventListener('touchend', up);
         if (hasRuns && factor !== 1) {
           edit.runs = edit.runs.map(line =>
             line.map(r => ({ text: r.text, size: Math.max(4, Math.round(r.size * factor)), bold: !!r.bold, italic: !!r.italic })));
@@ -3402,7 +3450,11 @@ class PDFEditorApp {
       };
       window.addEventListener('mousemove', move);
       window.addEventListener('mouseup', up);
-    });
+      window.addEventListener('touchmove', move, { passive: false });
+      window.addEventListener('touchend', up);
+    };
+    handle.addEventListener('mousedown', startResize);
+    handle.addEventListener('touchstart', startResize, { passive: false });
 
     // Delete
     del.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -3514,11 +3566,20 @@ class PDFEditorApp {
   }
 
   // ----- Erase tool (drag a rectangle to white-out content) -----
+
+  /** Extract { x, y } from either a MouseEvent or a TouchEvent. */
+  _erasePointer(e) {
+    return (e.touches && e.touches.length > 0)
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : { x: e.clientX, y: e.clientY };
+  }
+
   onEraseStart(event, pv) {
     if (this.mode !== 'erase' || !this.controller.isLoaded) return;
-    event.preventDefault();
+    event.preventDefault();   // stop page scroll on touch; no-op on mouse
+    const { x, y } = this._erasePointer(event);
     const rect = pv.canvas.getBoundingClientRect();
-    this.eraseDrag = { startX: event.clientX, startY: event.clientY, rect, pv };
+    this.eraseDrag = { startX: x, startY: y, rect, pv };
     const wrap = pv.wrapper;
     const sel = document.createElement('div');
     sel.style.position = 'absolute';
@@ -3532,12 +3593,14 @@ class PDFEditorApp {
 
   onEraseMove(event) {
     if (!this.eraseDrag) return;
+    if (event.cancelable) event.preventDefault();  // prevent scroll while erasing on touch
     const r = this.eraseDrag.rect;
     const x0 = this.eraseDrag.startX - r.left, y0 = this.eraseDrag.startY - r.top;
-    const x1 = event.clientX - r.left, y1 = event.clientY - r.top;
-    this.eraseSel.style.left = Math.min(x0, x1) + 'px';
-    this.eraseSel.style.top = Math.min(y0, y1) + 'px';
-    this.eraseSel.style.width = Math.abs(x1 - x0) + 'px';
+    const { x: cx, y: cy } = this._erasePointer(event);
+    const x1 = cx - r.left, y1 = cy - r.top;
+    this.eraseSel.style.left   = Math.min(x0, x1) + 'px';
+    this.eraseSel.style.top    = Math.min(y0, y1) + 'px';
+    this.eraseSel.style.width  = Math.abs(x1 - x0) + 'px';
     this.eraseSel.style.height = Math.abs(y1 - y0) + 'px';
   }
 
@@ -3546,13 +3609,17 @@ class PDFEditorApp {
     const r = this.eraseDrag.rect;
     const pv = this.eraseDrag.pv;
     const x0 = this.eraseDrag.startX - r.left, y0 = this.eraseDrag.startY - r.top;
-    const x1 = event.clientX - r.left, y1 = event.clientY - r.top;
+    // For touchend, touches[] is empty — use changedTouches instead.
+    const pt = (event.changedTouches && event.changedTouches.length > 0)
+      ? { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }
+      : { x: event.clientX, y: event.clientY };
+    const x1 = pt.x - r.left, y1 = pt.y - r.top;
     if (this.eraseSel) { this.eraseSel.remove(); this.eraseSel = null; }
     this.eraseDrag = null;
 
     const leftCss = Math.min(x0, x1), topCss = Math.min(y0, y1);
     const wCss = Math.abs(x1 - x0), hCss = Math.abs(y1 - y0);
-    if (!pv || wCss < 4 || hCss < 4) return;  // ignore stray clicks
+    if (!pv || wCss < 4 || hCss < 4) return;  // ignore stray taps/clicks
 
     // Displayed px -> that page's intrinsic canvas px -> PDF points (top-left origin).
     const toIntrinsic = pv.canvas.width / r.width;

@@ -175,6 +175,20 @@ export class AnnotationManager {
 
     const tool = this.activeTool;
 
+    // Tools that require the user's finger to draw rather than scroll.
+    const DRAWING_TOOLS = new Set(['draw', 'freeHighlight', 'line', 'rect', 'circle', 'highlight']);
+    const isDrawingTool = DRAWING_TOOLS.has(tool);
+
+    // ── Mobile touch-action toggle ─────────────────────────────────────────────
+    // 'none'  → browser hands ALL touch gestures to JS (Fabric draws, page won't scroll).
+    // 'auto'  → browser resumes normal scroll behaviour in selection/pointer mode.
+    entry.container.style.touchAction = isDrawingTool ? 'none' : 'auto';
+
+    // Fabric's own flag: when false, a touch-drag always draws rather than panning
+    // the canvas itself. Must be false whenever we own the touch gesture.
+    fabricCanvas.allowTouchScrolling = !isDrawingTool;
+    // ──────────────────────────────────────────────────────────────────────────
+
     if (tool === 'draw') {
       fabricCanvas.isDrawingMode = true;
       const brush = new PencilBrush(fabricCanvas);
@@ -206,6 +220,9 @@ export class AnnotationManager {
       this._wireTextHighlight(entry);
 
     } else if (tool === 'table') {
+      // 'table' is click-to-insert only, not a drag-draw; re-enable scroll.
+      entry.container.style.touchAction = 'auto';
+      fabricCanvas.allowTouchScrolling = true;
       fabricCanvas.defaultCursor = 'cell';
       fabricCanvas.selection = false;
       this._wireTableInsert(entry);

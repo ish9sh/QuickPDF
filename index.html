@@ -1039,6 +1039,83 @@
     .ann-dlg-btn:hover { background: #f6f7fb; }
     .ann-dlg-btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
     .ann-dlg-btn-primary:hover { background: var(--brand-dark); }
+
+    /* =====================================================================
+       Mobile responsive layout  ≤ 768 px
+       ===================================================================== */
+    @media (max-width: 768px) {
+
+      /* ── Workspace: stack sidebar below the main content area ── */
+      .workspace {
+        flex-direction: column-reverse;   /* sidebar ends up at the bottom */
+      }
+
+      /* ── Sidebar → horizontal bottom toolbar rail ── */
+      .sidebar {
+        width: 100%;
+        flex-direction: row;              /* tools line up left-to-right */
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 8px;
+        border-right: none;
+        border-top: 1px solid var(--line);
+        overflow-x: auto;                /* scroll if icons don't fit */
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        /* keep a fixed height so it doesn't push the stage around */
+        flex: 0 0 auto;
+      }
+
+      /* Tighter, square tool buttons in the rail */
+      .tool {
+        flex-direction: column;
+        width: auto;
+        min-width: 58px;
+        padding: 6px 8px;
+        flex: 0 0 auto;
+        font-size: 11px;
+      }
+      .tool .tool-ico           { width: 28px; height: 28px; }
+      .tool.featured .tool-ico,
+      .tool.merge-tool .tool-ico { width: 30px; height: 30px; }
+      .tool.featured svg        { width: 22px; height: 22px; }
+      .sidebar .sep             { width: 1px; height: 36px; margin: 0 4px; }
+
+      /* ── Floating text-styling toolbar ── */
+      #textToolbar {
+        max-width: 95vw;            /* never bleed off the right edge */
+        flex-wrap: wrap;            /* drop buttons to a second row */
+        white-space: normal;        /* allow wrapping inside the bar */
+      }
+
+      /* ── Confirm / password modals ── */
+      .confirm-box {
+        width: 90vw;
+        max-width: 90vw;
+        padding: 22px 16px;
+      }
+      .confirm-actions { flex-direction: column; }
+      .confirm-actions .btn { width: 100%; justify-content: center; }
+
+      .pw-box {
+        width: 90vw;
+        max-width: 90vw;
+        padding: 22px 16px 18px;
+      }
+      .pw-actions { flex-direction: column; }
+      .pw-actions .btn { width: 100%; justify-content: center; }
+    }
+
+    /* On very small phones (≤ 480 px) drop the text labels from tool buttons
+       so the full rail still fits in one row without horizontal scroll. */
+    @media (max-width: 480px) {
+      .tool { font-size: 0; min-width: 46px; padding: 6px; gap: 0; }
+      .tool .tool-ico           { width: 26px; height: 26px; }
+      .tool.featured .tool-ico,
+      .tool.merge-tool .tool-ico { width: 28px; height: 28px; }
+    }
+
   </style>
 </head>
 <body>
