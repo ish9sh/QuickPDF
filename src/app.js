@@ -95,7 +95,12 @@ class PDFEditorApp {
     window.addEventListener('resize', () => { if (this._signPickerOpen) this.positionSignPicker(); });
 
     let overlayResizeTimer;
+    let lastWindowWidth = window.innerWidth;
     window.addEventListener('resize', () => {
+      // Ignore vertical resizes (e.g., mobile soft keyboard popping up) so we don't tear down the active editor.
+      if (window.innerWidth === lastWindowWidth) return;
+      lastWindowWidth = window.innerWidth;
+      
       clearTimeout(overlayResizeTimer);
       overlayResizeTimer = setTimeout(() => {
         if (this.pageViews && this.pageViews.length > 0) {
