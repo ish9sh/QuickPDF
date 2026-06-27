@@ -844,6 +844,7 @@ class PDFEditorApp {
     lines.forEach((line) => {
       const div = document.createElement('div');
       div.contentEditable = 'true';
+      div.spellcheck = false;
       div.className = 'editable-text-box';
       // If this line was already edited, show the edited text (so edits persist on re-render).
       const pending = this.findLineEdit(line);
@@ -3149,19 +3150,26 @@ class PDFEditorApp {
       ? stage.getBoundingClientRect()
       : { left: 0, right: window.innerWidth, top: 0, bottom: window.innerHeight };
 
+    // Use visualViewport if available (vital on mobile when keyboard is open)
+    const vv = window.visualViewport || { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
+    const vvTop = vv.offsetTop;
+    const vvBottom = vv.offsetTop + vv.height;
+    const vvLeft = vv.offsetLeft;
+    const vvRight = vv.offsetLeft + vv.width;
+
     // Centre the toolbar over the element, but hard-clamp so it never bleeds
     // past either the stage boundary OR the visible viewport edge.
-    const maxLeft = Math.min(sr.right, window.innerWidth)  - tw - 4;
-    const minLeft = Math.max(sr.left,  0) + 4;
+    const maxLeft = Math.min(sr.right, vvRight) - tw - 4;
+    const minLeft = Math.max(sr.left, vvLeft) + 4;
     let left = r.left + r.width / 2 - tw / 2;
     left = Math.max(minLeft, Math.min(left, maxLeft));
 
     // Prefer above the element; fall back to below if it would clip the top.
     let top = r.top - th - 8;
-    if (top < sr.top + 4) top = r.bottom + 8;
+    if (top < Math.max(sr.top, vvTop) + 4) top = r.bottom + 8;
     // Hard-clamp vertically against both the stage and the viewport.
-    const maxTop = Math.min(sr.bottom, window.innerHeight) - th - 4;
-    const minTop = Math.max(sr.top,    0) + 4;
+    const maxTop = Math.min(sr.bottom, vvBottom) - th - 4;
+    const minTop = Math.max(sr.top, vvTop) + 4;
     top = Math.max(minTop, Math.min(top, maxTop));
 
     tb.style.left = left + 'px';
